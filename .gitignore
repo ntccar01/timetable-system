@@ -1,0 +1,12 @@
+# 防止任何原始課表 PDF 或 Word 檔案被誤傳至 GitHub
+*.pdf
+*.doc
+*.docx
+*.xls
+*.xlsx
+
+# Python / OS 暫存檔
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db

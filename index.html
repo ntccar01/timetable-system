@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>課表查詢與請假調課系統（去個資版）</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="brand-icon">課</div>
+        <div>
+          <h1>課表查詢與請假調課系統</h1>
+          <div class="brand-sub">
+            <span class="badge badge-privacy">🔒 已去個資模式（教師姓名遮罩）</span>
+            <span id="termSummaryText">載入中...</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="topbar-controls">
+        <label for="termSelect" style="font-size:13px;color:var(--text-muted);">學年度：</label>
+        <select id="termSelect"></select>
+        <button class="btn btn-primary" id="openImportTabBtn">＋ 匯入新學年度課表</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="browse">📅 課表查詢（教師 / 班級）</button>
+      <button class="tab-btn" data-tab="leave">🔄 請假與調課規劃</button>
+      <button class="tab-btn" data-tab="custom">✏️ 自訂教師課表（本機）</button>
+      <button class="tab-btn" data-tab="import">📥 學年度匯入與本機去個資工具</button>
+    </nav>
+
+    <!-- 分頁 1：課表查詢 -->
+    <section id="tab-browse" class="tab-panel active">
+      <div class="card">
+        <div class="card-title">
+          <div class="mode-switch">
+            <button id="modeTeacherBtn" class="active">依教師查詢</button>
+            <button id="modeClassBtn">依班級查詢</button>
+          </div>
+          <div id="browseQuickActions"></div>
+        </div>
+
+        <div class="filter-row">
+          <div>
+            <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">關鍵字搜尋（姓名 / 編號 / 班級）</label>
+            <input type="text" id="browseSearchInput" placeholder="輸入例如：林○泓、019、汽車二..." style="width:100%;" />
+          </div>
+          <div>
+            <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">快速下拉選擇</label>
+            <select id="browseDropdown" style="width:100%;"></select>
+          </div>
+        </div>
+
+        <div style="margin-top:14px;">
+          <div style="font-size:13px;font-weight:600;color:var(--text-muted);">或依科別分類點選：</div>
+          <div id="browseDeptPills" class="dept-pills"></div>
+          <div id="browseEntityGrid" class="entity-grid"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <span id="timetableTitle">請選擇教師或班級</span>
+          <span id="timetableMeta" style="font-size:13px;font-weight:400;color:var(--text-muted);"></span>
+        </div>
+        <div class="table-wrap" id="timetableContainer"></div>
+      </div>
+    </section>
+
+    <!-- 分頁 2：請假與調課規劃 -->
+    <section id="tab-leave" class="tab-panel">
+      <div class="card">
+        <div class="card-title">
+          <span>請假時間與條件設定</span>
+          <span class="badge badge-schoolwide">已自動排除：班會、週會、團體活動、彈性教學</span>
+        </div>
+
+        <div class="filter-row">
+          <div>
+            <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">1. 選擇請假教師（可篩選科別或搜尋）</label>
+            <div style="display:flex;gap:8px;">
+              <select id="leaveDeptFilter" style="width:42%;"></select>
+              <select id="leaveTeacherSelect" style="width:58%;"></select>
+            </div>
+          </div>
+          <div>
+            <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">2. 指定請假日期（自動對應星期）或直接選星期</label>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input type="date" id="leaveDateInput" style="width:55%;" />
+              <select id="leaveDaySelect" style="width:45%;">
+                <option value="一">星期一</option>
+                <option value="二">星期二</option>
+                <option value="三">星期三</option>
+                <option value="四">星期四</option>
+                <option value="五" selected>星期五</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:14px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+            <span style="font-size:13px;font-weight:600;">3. 勾選請假節次：</span>
+            <div>
+              <button class="btn btn-sm" id="selectAllPeriodsBtn">全天（第1～7節）</button>
+              <button class="btn btn-sm" id="clearPeriodsBtn">清除重選</button>
+            </div>
+          </div>
+          <div class="period-checks" id="leavePeriodChecks"></div>
+        </div>
+
+        <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;">
+          <label style="display:inline-flex;align-items:center;gap:6px;font-size:14px;cursor:pointer;">
+            <input type="checkbox" id="allowCrossWeekCheck" checked />
+            允許前後星期跨週調課（含前/後週同星期空堂）
+          </label>
+          <label style="display:inline-flex;align-items:center;gap:6px;font-size:14px;cursor:pointer;">
+            <input type="checkbox" id="emergencyLeaveCheck" />
+            臨時請假（無法往前週調課，鎖定「前週」）
+          </label>
+          <label style="display:inline-flex;align-items:center;gap:6px;font-size:14px;cursor:pointer;">
+            <input type="checkbox" id="showTriSwapCheck" checked />
+            無一對一選項時顯示「三方連環調（三角調課）」備案
+          </label>
+          <button class="btn btn-primary" id="runMatchBtn" style="margin-left:auto;">🔍 查詢可調課方案</button>
+        </div>
+      </div>
+
+      <div class="leave-layout">
+        <div id="leaveResultsContainer">
+          <div class="card">
+            <div class="notice notice-info">請選擇請假教師、星期與節次後，點擊「查詢可調課方案」。</div>
+          </div>
+        </div>
+
+        <div class="card summary-box">
+          <div class="card-title">
+            <span>📋 我的調課規劃清單</span>
+            <button class="btn btn-sm" id="clearPlanBtn">清空</button>
+          </div>
+          <div id="planListContainer">
+            <p style="font-size:13px;color:var(--text-muted);">尚未加入任何調課安排。在左側點選「加入規劃」後，系統會自動鎖定時段防止撞堂。</p>
+          </div>
+          <div id="planCopySection" class="hidden" style="margin-top:12px;">
+            <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px;">協調通知 / 備忘文字（可直接複製傳 LINE）：</label>
+            <textarea id="planCopyText" rows="5" style="width:100%;font-size:12px;" readonly></textarea>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
+              <button class="btn btn-success" id="copyPlanBtn" style="width:100%;justify-content:center;">📄 一鍵複製調課清單</button>
+              <button class="btn btn-primary" id="openFormModalBtn" style="width:100%;justify-content:center;">🖨️ 填入學校調代課單（列印 / PDF / Word）</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 分頁 3：自訂教師課表（本機儲存，適合兼課/新進教師） -->
+    <section id="tab-custom" class="tab-panel">
+      <div class="card">
+        <div class="card-title">
+          <span>✏️ 自訂教師 / 兼課教師課表（僅存於您的本機瀏覽器）</span>
+          <span class="badge badge-privacy">🔒 不上傳伺服器</span>
+        </div>
+        <div class="notice notice-info">
+          若資料庫中尚未建立您的課表（例如兼課教師或新進教師），可在此輸入姓名並點選下表設定上課班級與科目。儲存後即可在「課表查詢」與「請假與調課規劃」中直接使用，並可一鍵填入調代課單！
+        </div>
+
+        <div class="filter-row">
+          <div>
+            <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">教師姓名 / 稱呼</label>
+            <input type="text" id="customTeacherName" placeholder="例如：王○明（或直接輸入姓名）" style="width:100%;" />
+          </div>
+          <div>
+            <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">所屬科別</label>
+            <select id="customTeacherDept" style="width:100%;"></select>
+          </div>
+        </div>
+
+        <div style="margin-top:16px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+            <span style="font-size:13px;font-weight:600;">點選下方課表格子設定課程（空白＝空堂；亦可標記「校外/不克調課」避免誤判為可調空堂）：</span>
+            <button class="btn btn-sm" id="clearCustomGridBtn">清空課表</button>
+          </div>
+          <div class="table-wrap" id="customGridEditor"></div>
+        </div>
+
+        <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+          <button class="btn btn-primary" id="saveCustomTeacherBtn">💾 儲存並加入本機課表</button>
+          <button class="btn" id="resetCustomFormBtn">新增另一位教師</button>
+          <span id="customSaveMsg" style="font-size:13px;"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📋 已儲存的本機自訂教師</div>
+        <div id="customTeachersList"></div>
+      </div>
+    </section>
+
+    <!-- 分頁 4：學年度匯入與本機去個資工具 -->
+    <section id="tab-import" class="tab-panel">
+      <div class="card">
+        <div class="card-title">📥 匯入新學年度課表（純本機瀏覽器處理，不上傳任何資料）</div>
+        <div class="notice notice-info">
+          新學期拿到學校的「教師課表 PDF」與「班級課表 PDF」後，請先在自己電腦執行本機轉檔工具 <code>tools\轉換課表.bat</code>（或 <code>convert_pdf_to_json.py</code>），它會自動將所有教師姓名遮罩去個資並輸出 <code>.json</code> 檔。接著在此選擇該 JSON 檔即可立即更新！
+        </div>
+
+        <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:12px;">
+          <input type="file" id="jsonFileInput" accept=".json,application/json" />
+          <button class="btn btn-primary" id="importJsonFileBtn">匯入選取的 JSON 檔</button>
+        </div>
+
+        <div style="margin-top:16px;">
+          <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">或直接貼上已去個資的 JSON 內容：</label>
+          <textarea id="jsonPasteInput" rows="5" placeholder='{"schemaVersion": 1, "termId": "115-2", ...}' style="width:100%;font-family:monospace;font-size:12px;"></textarea>
+          <button class="btn" id="importJsonPasteBtn" style="margin-top:8px;">從貼上內容匯入</button>
+        </div>
+
+        <div id="importStatusMsg" style="margin-top:12px;font-size:13px;"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📚 已載入的學年度資料管理</div>
+        <div id="savedTermsList"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 調代課單預覽與匯出 Modal -->
+  <div id="formModal" class="modal-backdrop hidden">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <strong>📄 國立臺東專科學校附設高職部－調代課單預覽與匯出</strong>
+        <button class="btn btn-sm" id="closeFormModalBtn">✕ 關閉</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-controls-grid">
+          <div>
+            <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;white-space:nowrap;">申請教師姓名（留白供簽章）</label>
+            <input type="text" id="formTeacherNameInput" style="width:100%;" placeholder="輸入即帶入；留白則空白列印" />
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">假別</label>
+            <select id="formLeaveTypeSelect" style="width:100%;">
+              <option value="公" selected>公假</option>
+              <option value="事">事假</option>
+              <option value="喪">喪假</option>
+              <option value="病3+">病假(3日以上)</option>
+              <option value="病3-">病假(未達3日)</option>
+              <option value="其他">其他（手寫）</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">自訂假別（手寫）</label>
+            <input type="text" id="formCustomLeaveTypeInput" style="width:100%;" placeholder="例如：婚假、補休、生理假" />
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">公假事由 / 備註</label>
+            <input type="text" id="formReasonInput" style="width:100%;" placeholder="例如：公假（研習 / 比賽帶隊）" />
+          </div>
+        </div>
+        <div class="notice notice-info" style="font-size:12px;">
+          提示：教師簽名欄位已依需求將調課教師姓名以<strong>淡化小字體</strong>顯示於該欄位<strong>右下方</strong>，方便印出後請對方確認簽名。
+        </div>
+        <div id="formPreviewContainer" class="leave-form-preview-wrap"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" id="closeFormModalBtn2">取消</button>
+        <button class="btn btn-primary" id="printPdfBtn">🖨️ 直接列印 / 另存 PDF</button>
+        <button class="btn btn-success" id="downloadWordBtn">📝 下載 Word 檔 (.doc)</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="printArea" class="hidden"></div>
+
+  <!-- 自訂課表格子編輯 Modal -->
+  <div id="customCellModal" class="modal-backdrop hidden">
+    <div class="modal-dialog" style="max-width:440px;">
+      <div class="modal-header">
+        <strong id="customCellModalTitle">設定節次課程</strong>
+        <button class="btn btn-sm" id="closeCustomCellModalBtn">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="margin-bottom:12px;">
+          <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">時段狀態</label>
+          <select id="customCellType" style="width:100%;">
+            <option value="class">授課課程（可查詢調代課）</option>
+            <option value="unavailable">校外 / 不克到校（不列為可調空堂）</option>
+            <option value="empty">空堂（可配合調課）</option>
+          </select>
+        </div>
+        <div id="customCellClassFields">
+          <div style="margin-bottom:12px;">
+            <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">上課班級（選擇班級以對應調課教師）</label>
+            <select id="customCellClass" style="width:100%;"></select>
+          </div>
+          <div style="margin-bottom:12px;">
+            <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">科目名稱</label>
+            <input type="text" id="customCellSubject" style="width:100%;" placeholder="例如：基本電學、專題實作" />
+          </div>
+          <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+            <input type="checkbox" id="customCellPartTime" checked />
+            標記為「兼課」
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" id="cancelCustomCellBtn">取消</button>
+        <button class="btn btn-primary" id="saveCustomCellBtn">確定</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="data/default-bundle.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
